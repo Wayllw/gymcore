@@ -7,7 +7,8 @@ Se amanhã mudarmos para FastAPI ou Django, apenas este ficheiro muda.
 import logging
 import uuid
 from datetime import date, datetime
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect
+from flask_swagger_ui import get_swaggerui_blueprint
 
 from infrastructure.config.container import container
 from application.dtos.dtos import (
@@ -31,6 +32,165 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# ── Swagger UI ─────────────────────────────────────────────────────────────────
+SWAGGER_URL = "/docs"
+API_URL = "/swagger.json"
+
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={"app_name": "GymCore API — Fase 1"},
+)
+app.register_blueprint(swaggerui_blueprint)
+
+@app.route("/")
+def index():
+    return redirect("/docs")
+
+@app.route("/swagger.json")
+def swagger_spec():
+    return jsonify({
+        "openapi": "3.0.0",
+        "info": {
+            "title": "GymCore API",
+            "version": "1.0.0",
+            "description": "Sistema de Gestão de Ginásio — Fase 1: Monólito Hexagonal"
+        },
+        "paths": {
+            "/health": {
+                "get": {
+                    "summary": "Health check",
+                    "tags": ["Sistema"],
+                    "responses": {"200": {"description": "API online"}}
+                }
+            },
+            "/socios": {
+                "get": {
+                    "summary": "Listar todos os sócios",
+                    "tags": ["Sócios"],
+                    "responses": {"200": {"description": "Lista de sócios"}}
+                },
+                "post": {
+                    "summary": "Inscrever novo sócio",
+                    "tags": ["Sócios"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["nome", "email", "data_nascimento", "plano"],
+                                    "properties": {
+                                        "nome": {"type": "string", "example": "Ana Silva"},
+                                        "email": {"type": "string", "example": "ana@gym.pt"},
+                                        "data_nascimento": {"type": "string", "example": "1990-05-15"},
+                                        "plano": {"type": "string", "enum": ["BASICO", "STANDARD", "PREMIUM"]}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {"201": {"description": "Sócio criado"}, "409": {"description": "Email já existe"}}
+                }
+            },
+            "/socios/{socio_id}": {
+                "get": {
+                    "summary": "Obter sócio por ID",
+                    "tags": ["Sócios"],
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Sócio encontrado"}, "404": {"description": "Não encontrado"}}
+                }
+            },
+            "/socios/{socio_id}/plano": {
+                "patch": {
+                    "summary": "Atualizar plano do sócio",
+                    "tags": ["Sócios"],
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "plano": {"type": "string", "enum": ["BASICO", "STANDARD", "PREMIUM"]}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {"200": {"description": "Plano atualizado"}}
+                }
+            },
+            "/socios/{socio_id}/suspender": {
+                "post": {
+                    "summary": "Suspender sócio",
+                    "tags": ["Sócios"],
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Sócio suspenso"}}
+                }
+            },
+            "/socios/{socio_id}/planos-treino": {
+                "get": {
+                    "summary": "Listar planos de treino do sócio",
+                    "tags": ["Planos de Treino"],
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Lista de planos"}}
+                },
+                "post": {
+                    "summary": "Criar plano de treino",
+                    "tags": ["Planos de Treino"],
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["nome", "nivel", "exercicios"],
+                                    "properties": {
+                                        "nome": {"type": "string", "example": "Plano Força"},
+                                        "nivel": {"type": "string", "enum": ["INICIANTE", "INTERMEDIO", "AVANCADO"]},
+                                        "exercicios": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "nome": {"type": "string", "example": "Supino"},
+                                                    "series": {"type": "integer", "example": 3},
+                                                    "repeticoes": {"type": "integer", "example": 10},
+                                                    "descanso_segundos": {"type": "integer", "example": 60},
+                                                    "tipo": {"type": "string", "enum": ["FORCA", "CARDIO", "FLEXIBILIDADE", "FUNCIONAL"]}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {"201": {"description": "Plano criado"}}
+                }
+            },
+            "/planos-treino/{plano_id}": {
+                "get": {
+                    "summary": "Obter plano de treino por ID",
+                    "tags": ["Planos de Treino"],
+                    "parameters": [{"name": "plano_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Plano encontrado"}, "404": {"description": "Não encontrado"}}
+                }
+            },
+            "/socios/{socio_id}/relatorio": {
+                "post": {
+                    "summary": "Gerar relatório do sócio (processo pesado ~2s)",
+                    "tags": ["Relatórios"],
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Relatório gerado"}}
+                }
+            }
+        }
+    })
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -167,10 +327,6 @@ def obter_plano_treino(plano_id: str):
 
 @app.route("/socios/<socio_id>/relatorio", methods=["POST"])
 def gerar_relatorio(socio_id: str):
-    """
-    ATENÇÃO: Este endpoint bloqueia durante ~2 segundos (processo pesado simulado).
-    Este é o bottleneck que justificará a migração para Web-Queue-Worker na Fase 2.
-    """
     resultado = container.gerar_relatorio.executar(uuid.UUID(socio_id))
     return _ok({"caminho": resultado})
 
