@@ -1,3 +1,9 @@
+Grupo constituido por:
+Rui Duarte - 190200190
+Laysa Siqueira - 220000005
+David Carreira - 200100294
+
+
 # GymCore 🏋️
 
 **Sistema de Gestão de Ginásio — Fase 1: Monólito Hexagonal**
