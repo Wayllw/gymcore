@@ -15,9 +15,9 @@ from infrastructure.messaging.queue import FilaMensagens
 from infrastructure.events.event_bus import BusEventos, TipoEvento
 from infrastructure.events.consumers import AuditoriaConsumer, EstatisticasConsumer, AlertaConsumer
 from infrastructure.workers.relatorio_worker import RelatorioWorker
-from infrastructure.adapters.outbound.in_memory_repositories import (
-    InMemorySocioRepository,
-    InMemoryPlanoTreinoRepository,
+from infrastructure.adapters.outbound.json_repositories import (
+    JsonSocioRepository,
+    JsonPlanoTreinoRepository,
 )
 from infrastructure.adapters.outbound.async_services import (
     QueueRelatorioService,
@@ -74,8 +74,8 @@ class Container:
         self._worker.iniciar()
 
         # ── Repositórios (iguais à Fase 1) ────────────────────────────
-        self._socio_repo = InMemorySocioRepository()
-        self._plano_repo = InMemoryPlanoTreinoRepository()
+        self._socio_repo = JsonSocioRepository("dados/socios.json")
+        self._plano_repo = JsonPlanoTreinoRepository("dados/planos.json")
 
         # ── Serviços (substituídos — DIP em ação) ─────────────────────
         self._notificacao = EventNotificacaoService(self.bus_eventos)

@@ -1,0 +1,20 @@
+[
+  {
+    "id": "1c2a8da4-c947-4061-8861-a40474b4b08f",
+    "nome": "Laysa",
+    "email": "lays@g.com",
+    "data_nascimento": "2004-05-25",
+    "plano": "BASICO",
+    "estado": "ATIVO",
+    "data_inscricao": "2026-05-10"
+  },
+  {
+    "id": "bbae2176-eaf1-4997-8df9-91f7bf88f22c",
+    "nome": "Rui",
+    "email": "ruii@g.com",
+    "data_nascimento": "2001-09-12",
+    "plano": "BASICO",
+    "estado": "ATIVO",
+    "data_inscricao": "2026-05-10"
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "8f4d0cc2-8e97-4665-b760-6a0e4ed18480",
+    "nome": "pt1",
+    "nivel": "INICIANTE",
+    "socio_id": "bbae2176-eaf1-4997-8df9-91f7bf88f22c",
+    "data_criacao": "2026-05-10",
+    "ativo": true,
+    "exercicios": [
+      {
+        "nome": "rosca direta",
+        "series": 2,
+        "repeticoes": 12,
+        "descanso_segundos": 40,
+        "tipo": "FORCA"
+      }
+    ]
+  },
+  {
+    "id": "07e66bfc-05fb-44fb-98e5-e84327349084",
+    "nome": "string",
+    "nivel": "INICIANTE",
+    "socio_id": "1c2a8da4-c947-4061-8861-a40474b4b08f",
+    "data_criacao": "2026-05-10",
+    "ativo": true,
+    "exercicios": [
+      {
+        "nome": "bicicleta",
+        "series": 1,
+        "repeticoes": 1,
+        "descanso_segundos": 5,
+        "tipo": "CARDIO"
+      }
+    ]
+  },
+  {
+    "id": "12250dd8-92ba-40d9-a325-ee0e2bdca1f4",
+    "nome": "string",
+    "nivel": "INICIANTE",
+    "socio_id": "1c2a8da4-c947-4061-8861-a40474b4b08f",
+    "data_criacao": "2026-05-10",
+    "ativo": true,
+    "exercicios": [
+      {
+        "nome": "rosca direta",
+        "series": 2,
+        "repeticoes": 12,
+        "descanso_segundos": 40,
+        "tipo": "FORCA"
+      }
+    ]
+  }
+]
