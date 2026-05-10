@@ -21,6 +21,11 @@ class SocioJaExisteException(GymCoreException):
         super().__init__(f"Já existe um sócio com o email '{email}'.")
         self.email = email
 
+class SocioEmailBrokenException(GymCoreException):
+    def __init__(self, email: str):
+        super().__init__(f"Email '{email}' é inválido.")
+        self.email = email
+
 
 class SocioInativoException(GymCoreException):
     def __init__(self, socio_id: UUID):

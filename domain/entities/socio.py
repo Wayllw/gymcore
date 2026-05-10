@@ -7,7 +7,7 @@ from datetime import date
 from uuid import UUID, uuid4
 from domain.value_objects.plano_mensalidade import PlanoMensalidade
 from domain.value_objects.estado_socio import EstadoSocio
-from domain.exceptions.dominio_exceptions import SocioInativoException, PlanoInvalidoException
+from domain.exceptions.dominio_exceptions import SocioInativoException, PlanoInvalidoException, SocioEmailBrokenException
 
 
 @dataclass
@@ -24,7 +24,7 @@ class Socio:
         if not self.nome or not self.nome.strip():
             raise ValueError("O nome do sócio não pode estar vazio.")
         if "@" not in self.email:
-            raise ValueError(f"Email inválido: {self.email}")
+            raise SocioEmailBrokenException(self.email)
         if self.data_nascimento >= date.today():
             raise ValueError("Data de nascimento inválida.")
 
