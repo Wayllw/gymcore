@@ -1,0 +1,36 @@
+// Contrato gRPC entre Treinos-Service (cliente) e Sócios-Service (servidor).
+//
+// Porquê gRPC aqui e não REST?
+// O Treinos-Service precisa de validar, em sincronia, que um sócio existe e
+// está ativo antes de lhe associar um plano de treino. Esta validação:
+//   - é interna entre serviços (não é um caso de uso exposto ao cliente externo)
+//   - acontece com alta frequência (todas as criações de plano)
+//   - beneficia de um contrato fortemente tipado (protobuf) e de um transporte
+//     binário mais eficiente que JSON sobre REST
+// gRPC é a escolha natural para comunicação interna de alto desempenho entre
+// serviços, enquanto REST continua a ser usado para comunicação externa
+// (cliente → API Gateway → serviços).
+
+syntax = "proto3";
+
+package gymcore.socios;
+
+// Serviço exposto pelo Sócios-Service na porta 9001.
+service SocioValidationService {
+  // Valida se um sócio existe e devolve o seu estado actual.
+  // Usado pelo Treinos-Service antes de criar um plano de treino.
+  rpc ValidarSocio (ValidarSocioRequest) returns (ValidarSocioResponse);
+}
+
+message ValidarSocioRequest {
+  string socio_id = 1;
+  string correlation_id = 2;  // propagação de observabilidade distribuída
+}
+
+message ValidarSocioResponse {
+  bool existe = 1;
+  bool ativo = 2;          // true apenas se estado == ATIVO
+  string nome = 3;
+  string estado = 4;       // ATIVO | SUSPENSO | INATIVO
+  string mensagem = 5;     // detalhe legível (ex: motivo de rejeição)
+}

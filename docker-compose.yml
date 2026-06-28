@@ -1,0 +1,91 @@
+version: "3.9"
+
+# GymCore — Fase 3: Microservices, Persistência e Interoperabilidade
+#
+# Topologia:
+#   redis (broker assíncrono — Redis Streams)
+#   socios-service   (REST :8001, gRPC :9001) — BD própria: socios.db
+#   treinos-service  (REST :8002)              — BD própria: treinos.db
+#   gateway          (REST :8000) — único ponto de entrada externo
+#
+# Execução local obrigatória — nenhum serviço cloud gerido é usado.
+# Redis corre num contentor local, sem qualquer serviço externo.
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    container_name: gymcore-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - gymcore-net
+
+  socios-service:
+    build: ./socios-service
+    container_name: gymcore-socios-service
+    ports:
+      - "8001:8001"  # REST
+      - "9001:9001"  # gRPC
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SOCIOS_DB_PATH=/app/dados/socios.db
+    volumes:
+      - socios-data:/app/dados
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - gymcore-net
+    restart: unless-stopped
+
+  treinos-service:
+    build: ./treinos-service
+    container_name: gymcore-treinos-service
+    ports:
+      - "8002:8002"  # REST
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TREINOS_DB_PATH=/app/dados/treinos.db
+      - SOCIOS_GRPC_HOST=socios-service
+      - SOCIOS_GRPC_PORT=9001
+    volumes:
+      - treinos-data:/app/dados
+    depends_on:
+      redis:
+        condition: service_healthy
+      socios-service:
+        condition: service_started
+    networks:
+      - gymcore-net
+    restart: unless-stopped
+
+  gateway:
+    build: ./gateway
+    container_name: gymcore-gateway
+    ports:
+      - "8000:8000"  # único ponto de entrada externo
+    environment:
+      - SOCIOS_SERVICE_URL=http://socios-service:8001
+      - TREINOS_SERVICE_URL=http://treinos-service:8002
+    depends_on:
+      - socios-service
+      - treinos-service
+    networks:
+      - gymcore-net
+    restart: unless-stopped
+
+networks:
+  gymcore-net:
+    driver: bridge
+
+volumes:
+  socios-data:
+  treinos-data:
