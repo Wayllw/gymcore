@@ -44,6 +44,8 @@ Sistema de gestão de ginásio evoluído de monólito hexagonal (Fase 1) → ass
 docker-compose up --build
 ```
 
+- Swagger: http://localhost:8000/docs
+
 - Gateway: http://localhost:8000
 - Sócios-Service: http://localhost:8001 (gRPC :9001)
 - Treinos-Service: http://localhost:8002
