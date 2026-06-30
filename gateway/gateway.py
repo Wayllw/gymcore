@@ -66,6 +66,180 @@ def _headers_propagados():
     return {"X-Correlation-ID": g.correlation_id, "Content-Type": "application/json"}
 
 
+# ── Swagger UI (via CDN — sem dependência do pacote flask-swagger-ui) ────────
+SWAGGER_UI_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GymCore API Gateway — Docs</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      window.ui = SwaggerUIBundle({
+        url: '/swagger.json',
+        dom_id: '#swagger-ui',
+        presets: [SwaggerUIBundle.presets.apis],
+      });
+    };
+  </script>
+</body>
+</html>
+"""
+
+
+@app.route("/docs", methods=["GET"])
+def docs():
+    return SWAGGER_UI_HTML
+
+
+@app.route("/swagger.json", methods=["GET"])
+def swagger_spec():
+    return jsonify({
+        "openapi": "3.0.0",
+        "info": {
+            "title": "GymCore — API Gateway",
+            "version": "3.0.0",
+            "description": (
+                "Ponto único de entrada externo. Encaminha pedidos para o "
+                "Sócios-Service (:8001) e o Treinos-Service (:8002), propagando "
+                "o header X-Correlation-ID para observabilidade distribuída. "
+                "Para a documentação detalhada de cada serviço, ver também "
+                "http://localhost:8001/docs e http://localhost:8002/docs."
+            ),
+        },
+        "tags": [
+            {"name": "Sistema", "description": "Health check do próprio Gateway"},
+            {"name": "Sócios", "description": "Encaminhado para o Sócios-Service"},
+            {"name": "Planos de Treino", "description": "Encaminhado para o Treinos-Service"},
+            {"name": "Agregação", "description": "Combina dados de ambos os serviços"},
+        ],
+        "paths": {
+            "/health": {
+                "get": {"tags": ["Sistema"], "summary": "Health check do Gateway",
+                         "responses": {"200": {"description": "OK"}}}
+            },
+            "/socios": {
+                "get": {"tags": ["Sócios"], "summary": "Listar sócios (→ Sócios-Service)",
+                         "responses": {"200": {"description": "OK"}}},
+                "post": {
+                    "tags": ["Sócios"],
+                    "summary": "Inscrever sócio (→ Sócios-Service, dispara a Saga)",
+                    "requestBody": {
+                        "required": True,
+                        "content": {"application/json": {"schema": {
+                            "type": "object",
+                            "required": ["nome", "email", "data_nascimento", "plano"],
+                            "properties": {
+                                "nome": {"type": "string", "example": "Sofia Mendes"},
+                                "email": {"type": "string", "example": "sofia@gym.pt"},
+                                "data_nascimento": {"type": "string", "example": "1998-02-10"},
+                                "plano": {"type": "string", "enum": ["BASICO", "STANDARD", "PREMIUM"]},
+                            },
+                        }}},
+                    },
+                    "responses": {"201": {"description": "Criado"}, "409": {"description": "Email já existe"}},
+                },
+            },
+            "/socios/{socio_id}": {
+                "get": {
+                    "tags": ["Sócios"], "summary": "Obter sócio (→ Sócios-Service)",
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "OK"}, "404": {"description": "Não encontrado"}},
+                }
+            },
+            "/socios/{socio_id}/plano": {
+                "patch": {
+                    "tags": ["Sócios"], "summary": "Atualizar plano de mensalidade (→ Sócios-Service)",
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {"application/json": {"schema": {
+                            "type": "object", "required": ["plano"],
+                            "properties": {"plano": {"type": "string", "enum": ["BASICO", "STANDARD", "PREMIUM"]}},
+                        }}},
+                    },
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+            "/socios/{socio_id}/suspender": {
+                "post": {
+                    "tags": ["Sócios"], "summary": "Suspender sócio (→ Sócios-Service)",
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+            "/socios/{socio_id}/acompanhamento": {
+                "get": {
+                    "tags": ["Sócios"], "summary": "Estado de compensação da Saga (→ Sócios-Service)",
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+            "/socios/{socio_id}/planos-treino": {
+                "get": {
+                    "tags": ["Planos de Treino"], "summary": "Listar planos de treino (→ Treinos-Service)",
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "OK"}},
+                },
+                "post": {
+                    "tags": ["Planos de Treino"],
+                    "summary": "Criar plano de treino (→ Treinos-Service, valida via gRPC)",
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {"application/json": {"schema": {
+                            "type": "object",
+                            "required": ["nome", "nivel", "exercicios"],
+                            "properties": {
+                                "nome": {"type": "string", "example": "Plano Hipertrofia"},
+                                "nivel": {"type": "string", "enum": ["INICIANTE", "INTERMEDIO", "AVANCADO"]},
+                                "exercicios": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "nome": {"type": "string"},
+                                            "series": {"type": "integer"},
+                                            "repeticoes": {"type": "integer"},
+                                            "descanso_segundos": {"type": "integer"},
+                                            "tipo": {"type": "string", "enum": ["FORCA", "CARDIO", "FLEXIBILIDADE", "FUNCIONAL"]},
+                                        },
+                                    },
+                                },
+                            },
+                        }}},
+                    },
+                    "responses": {
+                        "201": {"description": "Criado"},
+                        "422": {"description": "Sócio inválido"},
+                        "503": {"description": "Circuito aberto — Sócios-Service indisponível"},
+                    },
+                },
+            },
+            "/planos-treino/{plano_id}": {
+                "get": {
+                    "tags": ["Planos de Treino"], "summary": "Obter plano por ID (→ Treinos-Service)",
+                    "parameters": [{"name": "plano_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "OK"}, "404": {"description": "Não encontrado"}},
+                }
+            },
+            "/socios/{socio_id}/completo": {
+                "get": {
+                    "tags": ["Agregação"],
+                    "summary": "Visão combinada: sócio + planos de treino",
+                    "description": "Demonstra agregação no Gateway: 2 chamadas internas, 1 resposta.",
+                    "parameters": [{"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+        },
+    })
+
+
 def _proxy(method, base_url, path, **kwargs):
     url = f"{base_url}{path}"
     logger.info("➡️  [GATEWAY] %s %s | correlation_id=%s", method, url, g.correlation_id)

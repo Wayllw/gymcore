@@ -68,6 +68,144 @@ def _serialize(obj):
     return obj
 
 
+# ── Swagger UI (via CDN — sem dependência do pacote flask-swagger-ui) ────────
+SWAGGER_UI_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Treinos-Service — API Docs</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      window.ui = SwaggerUIBundle({
+        url: '/swagger.json',
+        dom_id: '#swagger-ui',
+        presets: [SwaggerUIBundle.presets.apis],
+      });
+    };
+  </script>
+</body>
+</html>
+"""
+
+
+@app.route("/docs", methods=["GET"])
+def docs():
+    return SWAGGER_UI_HTML
+
+
+@app.route("/", methods=["GET"])
+def index():
+    from flask import redirect
+    return redirect("/docs")
+
+
+@app.route("/swagger.json", methods=["GET"])
+def swagger_spec():
+    return jsonify({
+        "openapi": "3.0.0",
+        "info": {
+            "title": "GymCore — Treinos-Service",
+            "version": "3.0.0",
+            "description": (
+                "Bounded Context: Gestão de Planos de Treino. "
+                "Antes de criar um plano, valida o sócio via gRPC ao Sócios-Service "
+                "(protegido por Circuit Breaker — ver campo circuit_breaker_estado em /health). "
+                "Database-per-Service: SQLite próprio (treinos.db)."
+            ),
+        },
+        "tags": [
+            {"name": "Sistema", "description": "Health check e estado do Circuit Breaker"},
+            {"name": "Planos de Treino", "description": "Gestão de planos de treino e exercícios"},
+        ],
+        "paths": {
+            "/health": {
+                "get": {
+                    "tags": ["Sistema"],
+                    "summary": "Health check + estado do Circuit Breaker",
+                    "description": "O campo circuit_breaker_estado mostra closed/open/half-open.",
+                    "responses": {"200": {"description": "Serviço operacional"}},
+                }
+            },
+            "/socios/{socio_id}/planos-treino": {
+                "post": {
+                    "tags": ["Planos de Treino"],
+                    "summary": "Criar plano de treino",
+                    "description": (
+                        "Valida o sócio via gRPC (ValidarSocio) antes de persistir. "
+                        "Se o circuito estiver aberto ou o sócio for inválido, devolve erro "
+                        "sem criar o plano."
+                    ),
+                    "parameters": [
+                        {"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}
+                    ],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["nome", "nivel", "exercicios"],
+                                    "properties": {
+                                        "nome": {"type": "string", "example": "Plano Hipertrofia"},
+                                        "nivel": {
+                                            "type": "string",
+                                            "enum": ["INICIANTE", "INTERMEDIO", "AVANCADO"],
+                                        },
+                                        "exercicios": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "nome": {"type": "string"},
+                                                    "series": {"type": "integer"},
+                                                    "repeticoes": {"type": "integer"},
+                                                    "descanso_segundos": {"type": "integer"},
+                                                    "tipo": {
+                                                        "type": "string",
+                                                        "enum": ["FORCA", "CARDIO", "FLEXIBILIDADE", "FUNCIONAL"],
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                }
+                            }
+                        },
+                    },
+                    "responses": {
+                        "201": {"description": "Plano criado"},
+                        "422": {"description": "Sócio inexistente ou inativo"},
+                        "503": {"description": "Validação indisponível (circuito aberto)"},
+                    },
+                },
+                "get": {
+                    "tags": ["Planos de Treino"],
+                    "summary": "Listar planos de treino de um sócio",
+                    "parameters": [
+                        {"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}
+                    ],
+                    "responses": {"200": {"description": "Lista de planos"}},
+                },
+            },
+            "/planos-treino/{plano_id}": {
+                "get": {
+                    "tags": ["Planos de Treino"],
+                    "summary": "Obter plano de treino por ID",
+                    "parameters": [
+                        {"name": "plano_id", "in": "path", "required": True, "schema": {"type": "string"}}
+                    ],
+                    "responses": {"200": {"description": "OK"}, "404": {"description": "Não encontrado"}},
+                }
+            },
+        },
+    })
+
+
 def _ok(data, status=200):
     return jsonify({
         "sucesso": True,

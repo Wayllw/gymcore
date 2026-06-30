@@ -76,6 +76,168 @@ def _serialize(obj):
     return obj
 
 
+# ── Swagger UI (via CDN — sem dependência do pacote flask-swagger-ui) ────────
+SWAGGER_UI_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sócios-Service — API Docs</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      window.ui = SwaggerUIBundle({
+        url: '/swagger.json',
+        dom_id: '#swagger-ui',
+        presets: [SwaggerUIBundle.presets.apis],
+      });
+    };
+  </script>
+</body>
+</html>
+"""
+
+
+@app.route("/docs", methods=["GET"])
+def docs():
+    return SWAGGER_UI_HTML
+
+
+@app.route("/", methods=["GET"])
+def index():
+    from flask import redirect
+    return redirect("/docs")
+
+
+@app.route("/swagger.json", methods=["GET"])
+def swagger_spec():
+    return jsonify({
+        "openapi": "3.0.0",
+        "info": {
+            "title": "GymCore — Sócios-Service",
+            "version": "3.0.0",
+            "description": (
+                "Bounded Context: Gestão de Sócios e Mensalidades. "
+                "Expõe REST (esta API) e gRPC :9001 (ValidarSocio, usado internamente "
+                "pelo Treinos-Service). Database-per-Service: SQLite próprio (socios.db)."
+            ),
+        },
+        "tags": [
+            {"name": "Sistema", "description": "Health check"},
+            {"name": "Sócios", "description": "Gestão de sócios e mensalidades"},
+            {"name": "Saga", "description": "Observabilidade da Saga 'Inscrição Completa'"},
+        ],
+        "paths": {
+            "/health": {
+                "get": {
+                    "tags": ["Sistema"],
+                    "summary": "Health check",
+                    "responses": {"200": {"description": "Serviço operacional"}},
+                }
+            },
+            "/socios": {
+                "get": {
+                    "tags": ["Sócios"],
+                    "summary": "Listar todos os sócios",
+                    "responses": {"200": {"description": "Lista de sócios"}},
+                },
+                "post": {
+                    "tags": ["Sócios"],
+                    "summary": "Inscrever novo sócio",
+                    "description": (
+                        "Cria o sócio e publica o evento 'socio.inscrito' no Redis Stream "
+                        "'stream:socios', desencadeando a Saga 'Inscrição Completa' no "
+                        "Treinos-Service."
+                    ),
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["nome", "email", "data_nascimento", "plano"],
+                                    "properties": {
+                                        "nome": {"type": "string", "example": "Sofia Mendes"},
+                                        "email": {"type": "string", "example": "sofia@gym.pt"},
+                                        "data_nascimento": {"type": "string", "example": "1998-02-10"},
+                                        "plano": {"type": "string", "enum": ["BASICO", "STANDARD", "PREMIUM"]},
+                                    },
+                                }
+                            }
+                        },
+                    },
+                    "responses": {
+                        "201": {"description": "Sócio criado"},
+                        "409": {"description": "Email já existe"},
+                    },
+                },
+            },
+            "/socios/{socio_id}": {
+                "get": {
+                    "tags": ["Sócios"],
+                    "summary": "Obter sócio por ID",
+                    "parameters": [
+                        {"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}
+                    ],
+                    "responses": {"200": {"description": "OK"}, "404": {"description": "Não encontrado"}},
+                }
+            },
+            "/socios/{socio_id}/plano": {
+                "patch": {
+                    "tags": ["Sócios"],
+                    "summary": "Atualizar plano de mensalidade",
+                    "parameters": [
+                        {"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}
+                    ],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["plano"],
+                                    "properties": {
+                                        "plano": {"type": "string", "enum": ["BASICO", "STANDARD", "PREMIUM"]}
+                                    },
+                                }
+                            }
+                        },
+                    },
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+            "/socios/{socio_id}/suspender": {
+                "post": {
+                    "tags": ["Sócios"],
+                    "summary": "Suspender sócio",
+                    "parameters": [
+                        {"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}
+                    ],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+            "/socios/{socio_id}/acompanhamento": {
+                "get": {
+                    "tags": ["Saga"],
+                    "summary": "Verificar se o sócio foi marcado para acompanhamento manual",
+                    "description": (
+                        "Ação de compensação da Saga: quando o Treinos-Service não consegue "
+                        "criar o plano inicial automático, publica 'plano_inicial.falhou'. "
+                        "Este serviço reage marcando o sócio aqui."
+                    ),
+                    "parameters": [
+                        {"name": "socio_id", "in": "path", "required": True, "schema": {"type": "string"}}
+                    ],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+        },
+    })
+
+
 def _ok(data, status=200):
     return jsonify({
         "sucesso": True,
